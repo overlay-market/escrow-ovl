@@ -112,7 +112,7 @@ contract EsOVL is ERC20, Pausable, AccessControl {
         whenNotPaused
         override
     {
-        if (from != address(0) && to != address(0) && !hasRole(DISTRIBUTOR_ROLE, from)) {
+        if (from != address(0) && to != address(0) && !hasRole(DISTRIBUTOR_ROLE, from) && !hasRole(DISTRIBUTOR_ROLE, to)) {
             revert NotDistributor();
         }
         super._beforeTokenTransfer(from, to, amount);

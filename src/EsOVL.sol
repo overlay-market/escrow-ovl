@@ -70,7 +70,7 @@ contract EsOVL is ERC20, Pausable, AccessControl {
 
     /// @notice Allows users to redeem their esOVL for OVL after the release timestamp.
     function redeem() external {
-        uint256 amount = releasable();
+        uint256 amount = releasable(msg.sender);
         released[msg.sender] += amount;
         _burn(msg.sender, amount);
         ovl.safeTransfer(msg.sender, amount);
@@ -78,14 +78,14 @@ contract EsOVL is ERC20, Pausable, AccessControl {
     }
 
     /// @notice Calculates the amount of esOVL that can currently be reedemed.
-    function releasable() public view returns (uint256) {
-        return vestedAmount(uint64(block.timestamp)) - released[msg.sender];
+    function releasable(address account) public view returns (uint256) {
+        return vestedAmount(uint64(block.timestamp), account) - released[account];
     }
 
     /// @notice Calculates the amount of esOVL that has already vested.
     /// This includes the esOVL already reedemed.
-    function vestedAmount(uint64 timestamp) public view returns (uint256) {
-        return _vestingSchedule(balanceOf(msg.sender) + released[msg.sender], timestamp);
+    function vestedAmount(uint64 timestamp, address account) public view returns (uint256) {
+        return _vestingSchedule(balanceOf(account) + released[account], timestamp);
     }
 
     /// @dev Linear vesting curve.

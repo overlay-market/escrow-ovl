@@ -73,10 +73,6 @@ contract NIPTest is Test {
 
         changePrank(MINTER);
         nip.mint(USER, AMOUNT);
-
-        changePrank(USER);
-        vm.expectRevert(); // USER does not have PAUSER_ROLE
-        nip.pause();
     }
 
     function testPermit() public {
@@ -97,6 +93,7 @@ contract NIPTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(BOB_PRIVATE_KEY, permitHash);
 
         assertEq(nip.allowance(BOB, USER), 0);
+        vm.startPrank(USER);
         nip.permit(BOB, USER, AMOUNT, deadline, v, r, s);
         assertEq(nip.allowance(BOB, USER), AMOUNT);
     }

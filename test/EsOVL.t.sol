@@ -11,7 +11,9 @@ contract EsOVLTest is Test {
     OVL public ovl;
 
     address public OWNER;
-    address public constant USER = address(0x2);
+    address public constant USER = address(0x1);
+    address public constant BOB = address(0x2);
+    address public constant DISTRIBUTOR = address(0x3);
     uint256 public constant AMOUNT = 1000;
     uint64 public constant START = 1687877663;
     uint64 public constant DURATION = 30*24*60*60; // 30 days
@@ -25,6 +27,8 @@ contract EsOVLTest is Test {
 
         ovl = new OVL();
         esOVL = new EsOVL(ovl, START, DURATION);
+
+        esOVL.grantRole(esOVL.DISTRIBUTOR_ROLE(), DISTRIBUTOR);
 
         assertTrue(esOVL.hasRole(esOVL.DEFAULT_ADMIN_ROLE(), OWNER));
         assertEq(esOVL.end(), START + DURATION);
@@ -76,31 +80,107 @@ contract EsOVLTest is Test {
         esOVL.withdrawExcessOVL();
     }
 
-    // TODO: adapt to linear vesting
-    // function testRedeem() public {
-    //     vm.warp(RELEASE_TIMESTAMP - 1);
+    function testRedeem() public {
+        esOVL.mintTo(USER, AMOUNT);
+        assertEq(ovl.balanceOf(USER), 0);
 
-    //     uint256 userBalance = 100;
-    //     esOVL.transfer(USER, userBalance);
+        vm.startPrank(USER);
 
-    //     vm.expectRevert(abi.encodePacked(
-    //         EsOVL.TimestampNotReached.selector,
-    //         RELEASE_TIMESTAMP,
-    //         RELEASE_TIMESTAMP - 1
-    //     ));
-    //     esOVL.redeem();
+        // Vesting period not started
+        vm.warp(START - 1);
+        assertEq(esOVL.releasable(USER), 0);
+        assertEq(esOVL.vestedAmount(uint64(block.timestamp), USER), 0);
+        esOVL.redeem();
+        assertEq(ovl.balanceOf(USER), 0);
+        assertEq(esOVL.balanceOf(USER), AMOUNT);
+        assertEq(esOVL.totalSupply(), AMOUNT);
+        assertEq(ovl.balanceOf(address(esOVL)), AMOUNT);
 
-    //     vm.warp(RELEASE_TIMESTAMP);
+        // 1/2 of vesting period passed
+        vm.warp(START + DURATION/2);
+        assertEq(esOVL.releasable(USER), AMOUNT/2);
+        assertEq(esOVL.vestedAmount(uint64(block.timestamp), USER), AMOUNT/2);
+        esOVL.redeem();
+        assertEq(ovl.balanceOf(USER), AMOUNT/2);
+        assertEq(esOVL.balanceOf(USER), AMOUNT/2);
+        assertEq(esOVL.totalSupply(), AMOUNT/2);
+        assertEq(ovl.balanceOf(address(esOVL)), AMOUNT/2);
+
+        // 3/4 of vesting period passed
+        vm.warp(START + (DURATION * 3) / 4);
+        assertEq(esOVL.releasable(USER), (AMOUNT * 1) / 4);
+        assertEq(esOVL.vestedAmount(uint64(block.timestamp), USER), (AMOUNT * 3) / 4);
+        vm.expectEmit();
+        emit OVLRedeemed(USER, (AMOUNT * 1) / 4);
+        esOVL.redeem();
+        assertEq(ovl.balanceOf(USER), AMOUNT * 3 / 4);
+        assertEq(esOVL.balanceOf(USER), (AMOUNT * 1) / 4);
+        assertEq(esOVL.totalSupply(), (AMOUNT * 1) / 4);
+        assertEq(ovl.balanceOf(address(esOVL)), (AMOUNT * 1) / 4);
+
+        // Vesting period passed
+        vm.warp(START + DURATION);
+        assertEq(esOVL.releasable(USER), (AMOUNT * 1) / 4);
+        assertEq(esOVL.vestedAmount(uint64(block.timestamp), USER), AMOUNT);
+        esOVL.redeem();
+        assertEq(ovl.balanceOf(USER), AMOUNT);
+        assertEq(esOVL.balanceOf(USER), 0);
+        assertEq(esOVL.totalSupply(), 0);
+        assertEq(ovl.balanceOf(address(esOVL)), 0);
+
+        // Vesting period passed
+        vm.warp(START + DURATION + 1);
+        deal(address(ovl), USER, AMOUNT);
+        ovl.approve(address(esOVL), AMOUNT);
+        esOVL.mintTo(USER, AMOUNT);
+        assertEq(ovl.balanceOf(USER), 0);
+        assertEq(esOVL.releasable(USER), AMOUNT);
+        assertEq(esOVL.vestedAmount(uint64(block.timestamp), USER), AMOUNT*2);
+        esOVL.redeem();
+        assertEq(ovl.balanceOf(USER), AMOUNT);
+        assertEq(esOVL.balanceOf(USER), 0);
+    }
+
+    function testPause() public {
+        vm.startPrank(USER);
+        vm.expectRevert(); // USER does not have PAUSER_ROLE
+        esOVL.pause();
+
+        changePrank(OWNER);
+        esOVL.mintTo(USER, AMOUNT/2);
+        esOVL.pause();
+
+        vm.expectRevert("Pausable: paused");
+        esOVL.mintTo(USER, AMOUNT/2);
+
+        changePrank(USER);
+        vm.expectRevert("Pausable: paused");
+        esOVL.redeem();
+
+        changePrank(OWNER);
+        vm.expectRevert("Pausable: paused");
+        esOVL.pause();
+
+        esOVL.unpause();
+
+        changePrank(USER);
+        esOVL.redeem();
+    }
+
+    function testDistributorRole() public {
+        deal(address(esOVL), USER, AMOUNT);
+
+        vm.startPrank(USER);
+        vm.expectRevert(EsOVL.NotDistributor.selector);
+        esOVL.transfer(BOB, AMOUNT);
         
-    //     esOVL.redeem();
-    //     assertEq(esOVL.balanceOf(OWNER), 0);
-        
-    //     changePrank(USER);
-    //     esOVL.redeem();
-    //     assertEq(ovl.balanceOf(USER), userBalance);
-    //     assertEq(esOVL.balanceOf(USER), 0);
+        esOVL.transfer(DISTRIBUTOR, AMOUNT);
+        assertEq(esOVL.balanceOf(DISTRIBUTOR), AMOUNT);
+        assertEq(esOVL.balanceOf(USER), 0);
 
-    //     assertEq(ovl.balanceOf(address(esOVL)), 0);
-    //     assertEq(esOVL.totalSupply(), 0);
-    // }
+        changePrank(DISTRIBUTOR);
+        esOVL.transfer(USER, AMOUNT);
+        assertEq(esOVL.balanceOf(DISTRIBUTOR), 0);
+        assertEq(esOVL.balanceOf(USER), AMOUNT);
+    }
 }

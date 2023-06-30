@@ -11,13 +11,26 @@ contract NIPTest is Test {
     address constant MINTER = address(0x2);
     address constant BURNER = address(0x3);
     address constant PAUSER = address(0x4);
+    address constant ADMIN = address(0x5);
     uint256 constant AMOUNT = 1000;
 
     function setUp() public {
-        nip = new NIP();
+        nip = new NIP(ADMIN);
+        vm.startPrank(ADMIN);
         nip.grantRole(nip.MINTER_ROLE(), MINTER);
         nip.grantRole(nip.BURNER_ROLE(), BURNER);
         nip.grantRole(nip.PAUSER_ROLE(), PAUSER);
+        vm.stopPrank();
+    }
+
+    function testAdmin() public {
+        bytes32 MINTER_ROLE = nip.MINTER_ROLE();
+
+        vm.expectRevert(); // `address(this)` is not ADMIN
+        nip.grantRole(MINTER_ROLE, USER);
+
+        vm.startPrank(ADMIN);
+        nip.grantRole(MINTER_ROLE, USER);
     }
 
     function testMint() public {
@@ -35,9 +48,10 @@ contract NIPTest is Test {
     }
 
     function testBurn() public {
+        vm.startPrank(MINTER);
         nip.mint(USER, AMOUNT);
 
-        vm.startPrank(USER);
+        changePrank(USER);
         nip.burn(AMOUNT/2);
         assertEq(nip.totalSupply(), AMOUNT/2);
         assertEq(nip.balanceOf(USER), AMOUNT/2);

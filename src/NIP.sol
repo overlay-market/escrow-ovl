@@ -12,11 +12,14 @@ contract NIP is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
-    constructor() ERC20("NIP", "NIP") ERC20Permit("NIP") {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(PAUSER_ROLE, msg.sender);
-        _grantRole(MINTER_ROLE, msg.sender);
-        _grantRole(BURNER_ROLE, msg.sender);
+    error ZeroAddress();
+
+    constructor(address defaultAdmin) ERC20("NIP", "NIP") ERC20Permit("NIP") {
+        if (defaultAdmin == address(0)) revert ZeroAddress();
+        _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
+        _grantRole(PAUSER_ROLE, defaultAdmin);
+        _grantRole(MINTER_ROLE, defaultAdmin);
+        _grantRole(BURNER_ROLE, defaultAdmin);
     }
 
     function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {

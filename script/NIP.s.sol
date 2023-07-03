@@ -9,7 +9,7 @@ contract DeployScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        address ADMIN = address(0x85f66DBe1ed470A091d338CFC7429AA871720283);
+        address ADMIN = address(0x5985FD48b48fdde2C5c1BC0b4f591c83D961184B);
 
         /*NIP nip = */new NIP(ADMIN);
 
